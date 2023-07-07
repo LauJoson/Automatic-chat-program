@@ -1,0 +1,142 @@
+// 导入语言库
+import java.io.File;
+import java.io.FileReader;
+import java.io.BufferedReader;
+import java.util.HashMap;
+
+// 导入第三方API或者自己训练的模型
+import com.microsoft.azure.cognitiveservices.vision.face.*;
+import com.webempath.api.*;
+import com.nlp.model.*;
+import com.nlg.model.*;
+
+// 定义一个聊天类
+public class Chat {
+    // 定义一个语言库的哈希表，用于存储问题和回答的对应关系
+    private HashMap<String, String> languageMap;
+
+    // 定义一些第三方API或者自己训练的模型的对象
+    private FaceClient faceClient;
+    private WebEmpath webEmpath;
+    private TextClassifier textClassifier;
+    private Seq2Seq seq2Seq;
+
+    // 定义一个构造方法，用于初始化语言库和API或者模型
+    public Chat(String fileName) {
+        // 创建一个语言库的哈希表
+        languageMap = new HashMap<String, String>();
+        // 读取语言库文件
+        try {
+            File file = new File(fileName);
+            FileReader fr = new FileReader(file);
+            BufferedReader br = new BufferedReader(fr);
+            String line = null;
+            // 按行读取语言库文件，每行包含一个问题和一个回答，用逗号分隔
+            while ((line = br.readLine()) != null) {
+                // 分割问题和回答
+                String[] parts = line.split(",");
+                // 将问题和回答存入语言库的哈希表中
+                languageMap.put(parts[0], parts[1]);
+            }
+            // 关闭文件流
+            br.close();
+            fr.close();
+        } catch (Exception e) {
+            // 处理异常
+            e.printStackTrace();
+        }
+
+        // 初始化API或者模型的对象
+        faceClient = new FaceClient("your_key", "your_endpoint");
+        webEmpath = new WebEmpath("your_key");
+        textClassifier = new TextClassifier("your_model_path");
+        seq2Seq = new Seq2Seq("your_model_path");
+    }
+
+    // 定义一个聊天方法，用于根据用户输入的问题返回一个回答
+    public String chat(String question) {
+        // 判断语言库中是否包含该问题
+        if (languageMap.containsKey(question)) {
+            // 如果包含，返回对应的回答
+            return languageMap.get(question);
+        } else {
+            // 如果不包含，根据用户的情绪和兴趣生成一个回答
+
+            // 定义一个变量用于存储用户的情绪
+            String emotion = null;
+
+            // 根据用户输入的问题的类型，选择不同的方式来识别用户的情绪
+            // 如果是面部表情，使用faceClient来识别
+            if (question.startsWith("face:")) {
+                // 从问题中提取面部表情的图片地址
+                String faceUrl = question.substring(5);
+                // 调用faceClient的detectWithUrl方法，传入图片地址和需要返回的情感属性
+                List<DetectedFace> detectedFaces = faceClient.face().detectWithUrl(faceUrl, new FaceAttributeType[]{FaceAttributeType.EMOTION});
+                // 判断是否检测到面部表情
+                if (detectedFaces.size() > 0) {
+                    // 如果检测到，获取第一个面部表情的情感属性
+                    Emotion emotion = detectedFaces.get(0).faceAttributes().emotion();
+                    // 根据情感属性的值，判断用户的情绪是哪一种，并赋值给emotion变量
+                    if (emotion.anger() > 0.5) {
+                        emotion = "anger";
+                    } else if (emotion.contempt() > 0.5) {
+                        emotion = "contempt";
+                    } else if (emotion.disgust() > 0.5) {
+                        emotion = "disgust";
+                    } else if (emotion.fear() > 0.5) {
+                        emotion = "fear";
+                    } else if (emotion.happiness() > 0.5) {
+                        emotion = "happiness";
+                    } else if (emotion.neutral() > 0.5) {
+                        emotion = "neutral";
+                    } else if (emotion.sadness() > 0.5) {
+                        emotion = "sadness";
+                    } else if (emotion.surprise() > 0.5) {
+                        emotion = "surprise";
+                    }
+                }
+            }
+
+            // 如果是语音，使用webEmpath来识别
+            if (question.startsWith("voice:")) {
+                // 从问题中提取语音的文件地址
+                String voiceUrl = question.substring(6);
+                // 调用webEmpath的analyze方法，传入文件地址和需要返回的情感属性
+                JSONObject result = webEmpath.analyze(voiceUrl, new String[]{"calm", "anger", "joy", "sorrow", "energy"});
+                // 判断是否成功返回结果
+                if (result.getInt("error") == 0) {
+                    // 如果成功，获取返回的情感属性
+                    int calm = result.getInt("calm");
+                    int anger = result.getInt("anger");
+                    int joy = result.getInt("joy");
+                    int sorrow = result.getInt("sorrow");
+                    int energy = result.getInt("energy");
+                    // 根据情感属性的值，判断用户的情绪是哪一种，并赋值给emotion变量
+                    if (calm > 50) {
+                        emotion = "calm";
+                    } else if (anger > 50) {
+                        emotion = "anger";
+                    } else if (joy > 50) {
+                        emotion = "joy";
+                    } else if (sorrow > 50) {
+                        emotion = "sorrow";
+                    } else if (energy > 50) {
+                        emotion = "energy";
+                    }
+                }
+            }
+
+            // 如果是文本，使用textClassifier来识别
+            if (question.startsWith("text:")) {
+                // 从问题中提取文本内容
+                String text = question.substring(5);
+                // 调用textClassifier的predict方法，传入文本内容和需要返回的情感类别
+                String label = textClassifier.predict(text, new String[]{"anger", "contempt", "disgust", "fear", "happiness", "neutral", "sadness", "surprise"});
+                // 将返回的类别赋值给emotion变量
+                emotion = label;
+            }
+
+            // 定义一个变量用于存储用户的兴趣
+            String interest = null;
+
+            // 使用textClassifier来识别用户的兴趣，传入文本内容
