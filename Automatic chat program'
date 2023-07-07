@@ -1,0 +1,43 @@
+# 导入需要的模块
+import requests
+import json
+
+# 定义一个函数，用来调用第三方api分析用户输入的语句
+def analyze_user_input(user_input):
+  # 这里假设你使用的是百度AI开放平台的情感倾向分析api，你需要先注册并获取你的API Key和Secret Key
+  # 你可以根据你的需求选择其他的api，只要它能返回你想要的信息
+  # 获取access_token
+  api_key = "你的API Key"
+  secret_key = "你的Secret Key"
+  auth_url = "https://aip.baidubce.com/oauth/2.0/token?grant_type=client_credentials&client_id=" + api_key + "&client_secret=" + secret_key
+  response = requests.get(auth_url)
+  access_token = response.json()["access_token"]
+  # 调用情感倾向分析api
+  sentiment_url = "https://aip.baidubce.com/rpc/2.0/nlp/v1/sentiment_classify?access_token=" + access_token
+  data = {"text": user_input}
+  headers = {"Content-Type": "application/json"}
+  response = requests.post(sentiment_url, data=json.dumps(data), headers=headers)
+  result = response.json()
+  # 返回分析结果，这里只返回了情感倾向，你可以根据你的需求返回其他信息，比如兴趣、情绪等
+  sentiment = result["items"][0]["sentiment"]
+  return sentiment
+
+# 定义一个函数，用来根据语言库内内容匹配最佳回复
+def match_best_reply(user_input, sentiment):
+  # 这里假设你的语言库是一个字典，键是情感倾向，值是一个列表，包含了对应情感倾向的回复
+  # 你可以根据你的需求修改语言库的结构和内容
+  language_library = {
+    0: ["我很抱歉听到这个。", "你想要谈谈吗？", "我在这里陪着你。"], # 消极
+    1: ["我很高兴听到这个。", "你真棒！", "我为你感到骄傲。"], # 中性
+    2: ["太棒了！", "你真幸运！", "我也很开心。"] # 积极
+  }
+  # 根据情感倾向从语言库中随机选择一个回复
+  import random
+  best_reply = random.choice(language_library[sentiment])
+  return best_reply
+
+# 主程序，获取用户输入的语句，调用上面定义的函数，输出最佳回复
+user_input = input("请输入一句话：")
+sentiment = analyze_user_input(user_input)
+best_reply = match_best_reply(user_input, sentiment)
+print("最佳回复：", best_reply)
