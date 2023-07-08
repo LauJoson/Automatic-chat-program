@@ -1,0 +1,118 @@
+# 导入所需的库
+import requests
+import json
+import tkinter as tk
+from tkinter import ttk
+from tkinter import messagebox
+from PIL import Image, ImageTk
+
+# 定义一个函数，根据用户输入的文字提取关键词进行搜索，返回匹配度最高的前20条内容
+def search_news(text):
+    # 使用Microsoft News API进行搜索，需要提供一个订阅密钥
+    # 可以在https://azure.microsoft.com/zh-cn/services/cognitive-services/bing-news-search-api/申请一个免费的试用密钥
+    subscription_key = "your_subscription_key"
+    endpoint = "https://api.bing.microsoft.com/v7.0/news/search"
+    headers = {"Ocp-Apim-Subscription-Key": subscription_key}
+    params = {"q": text, "count": 20, "mkt": "zh-CN"}
+    response = requests.get(endpoint, headers=headers, params=params)
+    response.raise_for_status()
+    results = response.json()
+    return results
+
+# 定义一个函数，根据搜索结果生成一个列表，每个元素是一个字典，包含新闻标题、摘要、图片链接和网页链接
+def generate_list(results):
+    news_list = []
+    for item in results["value"]:
+        news_dict = {}
+        news_dict["title"] = item["name"]
+        news_dict["summary"] = item["description"]
+        news_dict["image"] = item["image"]["thumbnail"]["contentUrl"] if "image" in item else None
+        news_dict["url"] = item["url"]
+        news_list.append(news_dict)
+    return news_list
+
+# 定义一个函数，根据新闻列表创建一个表格，显示新闻标题、摘要和图片，并为每一行添加一个按钮，点击后可以打开新闻网页
+def create_table(news_list):
+    # 创建一个表格，设置列名和列宽
+    table = ttk.Treeview(root, columns=["title", "summary", "image", "url"], show="headings")
+    table.column("title", width=300, anchor="w")
+    table.column("summary", width=500, anchor="w")
+    table.column("image", width=100, anchor="center")
+    table.column("url", width=0, anchor="w")
+    table.heading("title", text="标题")
+    table.heading("summary", text="摘要")
+    table.heading("image", text="图片")
+    
+    # 遍历新闻列表，为每一条新闻创建一行，并添加到表格中
+    for i, news in enumerate(news_list):
+        # 获取新闻标题、摘要、图片链接和网页链接
+        title = news["title"]
+        summary = news["summary"]
+        image_url = news["image"]
+        url = news["url"]
+        
+        # 如果有图片链接，就下载图片并缩放到合适的大小，然后转换为tkinter可用的格式
+        if image_url:
+            image_data = requests.get(image_url).content
+            image = Image.open(image_data)
+            image = image.resize((100, 100), Image.ANTIALIAS)
+            image = ImageTk.PhotoImage(image)
+        else:
+            image = None
+        
+        # 创建一个按钮，点击后可以打开新闻网页
+        button = tk.Button(root, text="查看详情", command=lambda url=url: open_url(url))
+        
+        # 将新闻标题、摘要、图片和按钮添加到表格的一行中
+        table.insert("", "end", values=(title, summary, image, url))
+        table.image_create(i, column=2, image=image)
+        table.window_create(i, column=3, window=button)
+    
+    # 返回表格对象
+    return table
+
+# 定义一个函数，打开新闻网页
+def open_url(url):
+    webbrowser.open(url)
+
+# 定义一个函数，当用户点击搜索按钮时执行的操作
+def search():
+    # 获取用户输入的文字
+    text = entry.get()
+    
+    # 如果没有输入文字，就弹出一个提示框
+    if not text:
+        messagebox.showinfo("提示", "请输入要搜索的内容")
+        return
+    
+    # 调用search_news函数，根据用户输入的文字提取关键词进行搜索，返回匹配度最高的前20条内容
+    results = search_news(text)
+    
+    # 调用generate_list函数，根据搜索结果生成一个列表
+    news_list = generate_list(results)
+    
+    # 调用create_table函数，根据新闻列表创建一个表格
+    table = create_table(news_list)
+    
+    # 将表格放置在窗口中
+    table.pack()
+    
+# 创建一个窗口对象，设置标题和大小
+root = tk.Tk()
+root.title("新闻内容搜索")
+root.geometry("900x600")
+
+# 创建一个标签对象，显示欢迎语
+label = tk.Label(root, text="欢迎使用新闻内容搜索程序", font=("Arial", 20))
+label.pack()
+
+# 创建一个输入框对象，让用户输入要搜索的内容
+entry = tk.Entry(root, font=("Arial", 15))
+entry.pack()
+
+# 创建一个按钮对象，让用户点击后进行搜索
+button = tk.Button(root, text="搜索", font=("Arial", 15), command=search)
+button.pack()
+
+# 启动窗口的主循环
+root.mainloop()
