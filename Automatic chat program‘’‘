@@ -1,0 +1,113 @@
+# 导入所需的库
+import requests
+import json
+import tkinter as tk
+
+# 定义一个函数，用于调用Bing的文本分析API，获取用户输入的情感和兴趣
+def get_sentiment_and_interest(text):
+    # 设置API的订阅密钥和终结点
+    subscription_key = "your_subscription_key"
+    endpoint = "https://api.bing.microsoft.com/v7.0/text/analytics"
+    # 设置请求头和参数
+    headers = {"Ocp-Apim-Subscription-Key": subscription_key}
+    params = {"model-version": "latest"}
+    # 设置请求体，包含文本和语言
+    body = {
+        "documents": [
+            {
+                "id": "1",
+                "text": text,
+                "language": "zh-Hans"
+            }
+        ]
+    }
+    # 发送POST请求，获取响应
+    response = requests.post(endpoint + "/sentiment", headers=headers, params=params, json=body)
+    # 解析响应，获取情感分数
+    sentiment_score = response.json()["documents"][0]["confidenceScores"]
+    # 判断情感是正面、中性还是负面
+    if sentiment_score["positive"] > sentiment_score["negative"]:
+        sentiment = "正面"
+    elif sentiment_score["positive"] < sentiment_score["negative"]:
+        sentiment = "负面"
+    else:
+        sentiment = "中性"
+    
+    # 发送POST请求，获取响应
+    response = requests.post(endpoint + "/keyPhrases", headers=headers, params=params, json=body)
+    # 解析响应，获取关键短语
+    key_phrases = response.json()["documents"][0]["keyPhrases"]
+    # 判断是否有关键短语，如果有则取第一个作为兴趣
+    if key_phrases:
+        interest = key_phrases[0]
+    else:
+        interest = "无"
+    
+    # 返回情感和兴趣
+    return sentiment, interest
+
+# 定义一个函数，用于调用Bing的聊天API，获取智能的回复
+def get_reply(text):
+    # 设置API的订阅密钥和终结点
+    subscription_key = "your_subscription_key"
+    endpoint = "https://api.bing.microsoft.com/v7.0/chat"
+    # 设置请求头和参数
+    headers = {"Ocp-Apim-Subscription-Key": subscription_key}
+    params = {"language": "zh-Hans"}
+    # 设置请求体，包含文本和会话ID（可选）
+    body = {
+        "text": text,
+        #"sessionId": "your_session_id" # 如果需要保持会话状态，可以设置一个会话ID
+    }
+    # 发送POST请求，获取响应
+    response = requests.post(endpoint, headers=headers, params=params, json=body)
+    # 解析响应，获取回复文本
+    reply_text = response.json()["response"]
+    
+    # 返回回复文本
+    return reply_text
+
+# 定义一个函数，用于处理用户输入的事件
+def handle_input(event):
+    # 获取用户输入的文本
+    user_text = entry.get()
+    
+    # 清空输入框
+    entry.delete(0, tk.END)
+    
+    # 在聊天框中显示用户输入的文本，并换行
+    chatbox.insert(tk.END, f"用户: {user_text}\n")
+    
+    # 调用函数，获取用户输入的情感和兴趣，并在聊天框中显示，并换行
+    sentiment, interest = get_sentiment_and_interest(user_text)
+    chatbox.insert(tk.END, f"情感: {sentiment}\n")
+    chatbox.insert(tk.END, f"兴趣: {interest}\n")
+    
+    # 调用函数，获取智能的回复，并在聊天框中显示，并换行
+    reply_text = get_reply(user_text)
+    chatbox.insert(tk.END, f"Bing: {reply_text}\n")
+    
+    # 让聊天框自动滚动到最底部
+    chatbox.see(tk.END)
+
+# 创建一个tkinter窗口
+window = tk.Tk()
+# 设置窗口的标题
+window.title("Bing聊天程序")
+# 设置窗口的大小
+window.geometry("600x400")
+
+# 创建一个文本框，用于显示聊天内容
+chatbox = tk.Text(window, font=("微软雅黑", 12))
+# 将文本框放置在窗口的上半部分，填充整个宽度
+chatbox.pack(side=tk.TOP, fill=tk.X)
+
+# 创建一个输入框，用于输入聊天内容
+entry = tk.Entry(window, font=("微软雅黑", 12))
+# 将输入框放置在窗口的下半部分，填充整个宽度
+entry.pack(side=tk.BOTTOM, fill=tk.X)
+# 绑定回车键的事件，触发处理用户输入的函数
+entry.bind("<Return>", handle_input)
+
+# 启动窗口的主循环
+window.mainloop()
